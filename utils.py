@@ -1,4 +1,10 @@
+
 import random 
+import re
+import numpy as np
+
+MAX_LENGTH = 510
+MIN_SV_LENGTH = 50
 
 def INV(seq):
     """
@@ -79,9 +85,9 @@ def INS(seq_1, seq_2):
     # Choose breakpoints
     l_1 = len(seq_1)
     l_2 = len(seq_2)
-    max_ins_length = min(MAX_LENGTH - l1, l_2)
+    max_ins_length = min(MAX_LENGTH - l_1, l_2)
     assert max_ins_length >= MIN_SV_LENGTH, "Trying to perform insertion smaller than 50!"
-    ins_length = np.random.randint(MIN_SV_LENGTH, max_ins_length)
+    ins_length = random.randint(MIN_SV_LENGTH, max_ins_length)
     b1 = random.randint(0, l_1)
     b2 = random.randint(0, l_2 - ins_length)
     
@@ -93,16 +99,23 @@ def INS(seq_1, seq_2):
     
     return new_seq, b1, b1 + ins_length, ins_length
 
-def extract_sequence(file_name):
+def extract_sequence(file_name, N):
     with open(file_name, 'r') as f:
-        header = f.readlines(1)[0]
+        _ = f.readlines(1)[0]
         text = f.read()
-    text = text.replace("\n", "") # remove all new lines
-    text = text.replace("N", "")  # remove all N bases
+    
+    text = re.sub('([N,n,\n])', "", text)
     text_l = len(text)
-    new_seq_start = np.random.randint(0, text_l - seq_l + 1)
-    new_seq = text[new_seq_start:new_seq_start + seq_l]
-    return new_seq
+
+    sequences = np.full(N, None)
+
+    for i in range(N):
+        seq_l = random.randint(MIN_SV_LENGTH + 1, MAX_LENGTH - MIN_SV_LENGTH)
+        new_seq_start = random.randint(0, text_l - seq_l + 1)
+        new_seq = text[new_seq_start:new_seq_start + seq_l]
+        sequences[i] = new_seq
+
+    return sequences
 
 def assert_sequence_validity(seq):
     assert isinstance(seq, str), f"Passed argument should be a string!"
