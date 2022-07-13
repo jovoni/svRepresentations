@@ -3,3 +3,5 @@ __pycache__/*
 dataset/*
 .ipynb_checkpoints/*
 *.ipynb
+DNABERT/
+dnabert6/*

@@ -48,7 +48,7 @@ def main():
                 tokens, segments = prepare_bert_input(seq=seq, tokenizer=tokenizer)
                 tokens, segments = tokens.to(device), segments.to(device)
                 outputs = model(tokens, segments)
-		hidden_states = outputs[1]
+                hidden_states = outputs[1]
 
                 # Concatenate the tensors for all layers. We use `stack` here to
                 # create a new dimension in the tensor.
