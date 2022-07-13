@@ -14,7 +14,7 @@ SVs = {
     3: INV
 }
 
-def create_homogenous_dataset(N: int, ratios: np.array, chromosome_name: str, same_sequence: bool) -> pd.DataFrame:
+def create_homogenous_dataset(N, ratios, chromosome_name, same_sequence):
     """
     Create a dataset from the same chromosome.
     N : length dataset
@@ -27,7 +27,7 @@ def create_homogenous_dataset(N: int, ratios: np.array, chromosome_name: str, sa
     ratios = ratios / np.sum(ratios)
 
     # Create name of file 
-    file_name = _parent_path.joinpath(f"data/chromosomes/{chromosome_name}.fa")
+    file_name = f'data/chromosomes/{chromosome_name}.fa'
 
     # Initialize columns
     if same_sequence:

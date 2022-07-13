@@ -16,16 +16,19 @@ def main():
     tokenizer_name = "dna6"
     model_path = "dnabert6/"
 
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
     # Load tokenizer
     tokenizer = tokenizer_class.from_pretrained(tokenizer_name)
 
     # Read sequences
-    csv_name = "chr21_DEL0.25_DUP0.25_INV0.25_INS0.25_homo"
+    csv_name = 'chr21_DEL0.25_DUP0.25_INV0.25_INS0.25_etero'
     d = pd.read_csv(f"dataset/{csv_name}.csv", sep=";")
     sequences = d.NEW_SEQ.values  
 
     # Load model
     model = model_class.from_pretrained(model_path, output_hidden_states=True)
+    model.to(device)
     model.eval()
 
     types_embeddings = ['sum_last_4', 'concat_last_4', "sum_all"]
@@ -42,8 +45,8 @@ def main():
             embeddings_of_sentences = torch.empty([n_sentences, l_embedding])
 
             for i, seq in tqdm(enumerate(sequences)):
-                tokens_tensor, segments_tensor = prepare_bert_input(seq=seq, tokenizer=tokenizer)
-                outputs = model(tokens_tensor, segments_tensor)
+                inputs = prepare_bert_input(seq=seq, tokenizer=tokenizer).to(device)		
+		outputs = model(**inputs)
                 hidden_states = outputs[1]
 
                 # Concatenate the tensors for all layers. We use `stack` here to
