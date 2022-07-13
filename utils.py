@@ -2,6 +2,7 @@
 import random 
 import re
 import numpy as np
+import torch
 
 MAX_LENGTH = 510
 MIN_SV_LENGTH = 50
@@ -121,3 +122,40 @@ def assert_sequence_validity(seq):
     assert isinstance(seq, str), f"Passed argument should be a string!"
     assert len(seq) <= MAX_LENGTH, f"Sequence is longer than maximum lenght! {len(seq)} > {MAX_LENGTH}"
     assert len(seq) > 50, f"Sequence is not long enough! 50 bp is minimum!"
+
+def prepare_bert_input(seq, tokenizer):
+    """
+    Transform the sequence into an input for bert.
+    """
+
+    # Split into kmer
+    kmer_seq = get_kmer_sentence(seq, kmer=6)
+    # Padding
+    kmer_seq_padded = "[CLS]" + kmer_seq + "[SEP]"
+    # Tokenize and convert indo indices
+    tokenized_seq = tokenizer.tokenize(kmer_seq_padded)
+    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_seq)
+    # Only one "sentence"
+    segments_ids = [1] * len(tokenized_seq)
+    # To tensors
+    tokens_tensor = torch.tensor([indexed_tokens])
+    segments_tensor = torch.tensor([segments_ids])
+    return tokens_tensor, segments_tensor
+
+def get_kmer_sentence(original_string, kmer=1, stride=1):
+    """
+    Transform the original input, which is a string, into another
+    string where every kmer is separated by a whitespace.
+    IN : original_string, length of kmer
+    """
+    if kmer == -1:
+        return original_string
+
+    sentence = ""
+    original_string = original_string.replace("\n", "")
+    i = 0
+    while i <= len(original_string)-kmer:
+        sentence += original_string[i:i+kmer] + " "
+        i += stride
+    
+    return sentence[:-1].strip("\"")
