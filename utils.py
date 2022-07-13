@@ -5,6 +5,7 @@ import numpy as np
 import torch
 
 MAX_LENGTH = 510
+MIN_LENGTH = 100
 MIN_SV_LENGTH = 50
 
 def INV(seq):
@@ -40,7 +41,8 @@ def DEL(seq):
     
     # Choose breakpoints
     l = len(seq)
-    del_length = random.randint(MIN_SV_LENGTH, l) 
+    max_deletion_length = int(0.9 * l)
+    del_length = random.randint(MIN_SV_LENGTH, max_deletion_length) 
     b = random.randint(0, l - del_length) # compute breakpoint
     s, e = b, b + del_length # breakpoint 1 and 2
     
@@ -111,7 +113,7 @@ def extract_sequence(file_name, N):
     sequences = np.full(N, None)
 
     for i in range(N):
-        seq_l = random.randint(MIN_SV_LENGTH + 1, MAX_LENGTH - MIN_SV_LENGTH)
+        seq_l = random.randint(MIN_LENGTH + 1, MAX_LENGTH - MIN_SV_LENGTH)
         new_seq_start = random.randint(0, text_l - seq_l + 1)
         new_seq = text[new_seq_start:new_seq_start + seq_l]
         sequences[i] = new_seq
@@ -123,24 +125,13 @@ def assert_sequence_validity(seq):
     assert len(seq) <= MAX_LENGTH, f"Sequence is longer than maximum lenght! {len(seq)} > {MAX_LENGTH}"
     assert len(seq) > 50, f"Sequence is not long enough! 50 bp is minimum!"
 
-def prepare_bert_input(seq, tokenizer):
-    """
-    Transform the sequence into an input for bert.
-    """
-
+def preprocess_sequence(seq):
     # Split into kmer
     kmer_seq = get_kmer_sentence(seq, kmer=6)
     # Padding
-    kmer_seq_padded = "[CLS]" + kmer_seq + "[SEP]"
-    # Tokenize and convert indo indices
-    tokenized_seq = tokenizer.tokenize(kmer_seq_padded)
-    indexed_tokens = tokenizer.convert_tokens_to_ids(tokenized_seq)
-    # Only one "sentence"
-    segments_ids = [1] * len(tokenized_seq)
-    # To tensors
-    tokens_tensor = torch.tensor([indexed_tokens])
-    segments_tensor = torch.tensor([segments_ids])
-    return tokens_tensor, segments_tensor
+    # kmer_seq_padded = "[CLS] " + kmer_seq + " [SEP]"
+    kmer_seq_padded = kmer_seq
+    return kmer_seq_padded.upper()
 
 def get_kmer_sentence(original_string, kmer=1, stride=1):
     """
@@ -159,3 +150,15 @@ def get_kmer_sentence(original_string, kmer=1, stride=1):
         i += stride
     
     return sentence[:-1].strip("\"")
+
+def assign_to_device(tokenizer_output, device):
+
+    tokens_tensor = tokenizer_output['input_ids'].to(device)
+    token_type_ids = tokenizer_output['token_type_ids'].to(device)
+    attention_mask = tokenizer_output['attention_mask'].to(device)
+
+    output = {'input_ids' : tokens_tensor, 
+            'token_type_ids' : token_type_ids, 
+            'attention_mask' : attention_mask}
+
+    return output
