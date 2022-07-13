@@ -40,13 +40,13 @@ def main():
     # Make inference
     with torch.no_grad():
 
-        for embedd_type, l_embedding in tqdm(zip(['sum_last_4', 'concat_last_4', "sum_all"], length_embeddings)):
+        for embedd_type, l_embedding in tqdm(zip(types_embeddings, length_embeddings)):
             
             embeddings_of_sentences = torch.empty([n_sentences, l_embedding])
 
             for i, seq in tqdm(enumerate(sequences)):
-                inputs = prepare_bert_input(seq=seq, tokenizer=tokenizer).to(device)		
-		outputs = model(**inputs)
+                inputs = prepare_bert_input(seq=seq, tokenizer=tokenizer).to(device)
+                outputs = model(**inputs)
                 hidden_states = outputs[1]
 
                 # Concatenate the tensors for all layers. We use `stack` here to
