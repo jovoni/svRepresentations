@@ -45,9 +45,10 @@ def main():
             embeddings_of_sentences = torch.empty([n_sentences, l_embedding])
 
             for i, seq in tqdm(enumerate(sequences)):
-                inputs = prepare_bert_input(seq=seq, tokenizer=tokenizer).to(device)
-                outputs = model(**inputs)
-                hidden_states = outputs[1]
+                tokens, segments = prepare_bert_input(seq=seq, tokenizer=tokenizer)
+                tokens, segments = tokens.to(device), segments.to(device)
+                outputs = model(tokens, segments)
+		hidden_states = outputs[1]
 
                 # Concatenate the tensors for all layers. We use `stack` here to
                 # create a new dimension in the tensor.
