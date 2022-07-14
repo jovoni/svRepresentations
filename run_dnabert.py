@@ -33,9 +33,11 @@ def main():
         n_gpu = torch.cuda.device_count()
         if n_gpu > 1:
             print(f"Using {n_gpu} GPUs!")
+            model.to(device)
             model = nn.DataParallel(model)
     else:
         device = torch.device("cpu")
+        model.to(device)
         n_gpu = torch.cuda.device_count()
 
     # Read sequences
@@ -59,7 +61,6 @@ def main():
     preds = None
     out_label_ids = None
     
-    model.to(device)
     with torch.no_grad():
         for batch, labels in tqdm(zip(batch_loader, label_loader), desc="Running inference"):
             model.eval()
