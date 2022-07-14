@@ -15,8 +15,8 @@ MODEL_CLASSES = {
 
 def main():
     # INPUT
-    csv_name = 'chr21_DEL0.25_DUP0.25_INV0.25_INS0.25_etero'
-    batch_size_per_process = 32
+    csv_name = 'eval'
+    batch_size_per_process = 16
     embedding_type = 'concat_last_4'
 
     # Info
@@ -41,21 +41,18 @@ def main():
         n_gpu = torch.cuda.device_count()
 
     # Read sequences
-    d = pd.read_csv(f"dataset/{csv_name}.csv", sep=";")
+    d = pd.read_csv(f"fine_tune_data/{csv_name}.tsv", sep="\t")
 
     # Prepare tokenized sequences
-    sequences = d.NEW_SEQ.values
-    sv_types = d.SV_TYPE.values
-    processed_sequences = [preprocess_sequence(s) for s in sequences]
-
+    sequences = d.sequence.values
+    sv_types = d.label.values
 
     # Prepare Dataloader
-    seq_sampler = SequentialSampler(processed_sequences)
+    seq_sampler = SequentialSampler(sequences)
     label_sampler = SequentialSampler(sv_types)
 
-    total_batch_size = batch_size_per_process * max(1, n_gpu)
-    batch_loader = DataLoader(dataset=processed_sequences, sampler=seq_sampler, batch_size=total_batch_size)
-    label_loader = DataLoader(dataset=sv_types, sampler=label_sampler, batch_size=total_batch_size)
+    batch_loader = DataLoader(dataset=sequences, sampler=seq_sampler, batch_size=batch_size_per_process)
+    label_loader = DataLoader(dataset=sv_types, sampler=label_sampler, batch_size=batch_size_per_process)
 
     # Start inference
     preds = None

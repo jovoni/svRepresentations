@@ -8,6 +8,9 @@ MAX_LENGTH = 510
 MIN_LENGTH = 100
 MIN_SV_LENGTH = 50
 
+def NO_SV(seq):
+    return seq, 0, 0, 0
+
 def INV(seq):
     """
     Reverse a portion of the sequence.
