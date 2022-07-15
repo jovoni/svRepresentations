@@ -41,7 +41,6 @@ def train(gpu, args):
         {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
     ]
 
-    warmup_steps = args.warmup_steps if args.warmup_percent == 0 else int(args.warmup_percent * t_total)
 
     optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon, betas=(args.beta1, args.beta2))
     scheduler = get_linear_schedule_with_warmup(
@@ -61,6 +60,7 @@ def train(gpu, args):
         pin_memory=False)
 
     t_total = len(train_dataloader) * args.num_train_epochs
+    warmup_steps = args.warmup_steps if args.warmup_percent == 0 else int(args.warmup_percent * t_total)
 
     tr_loss = 0.0
     logging_loss = 0.0
