@@ -28,7 +28,7 @@ def train(gpu, args):
                                                         output_hidden_states=False)
 
     torch.cuda.set_device(gpu)
-    model.cuda.gpu()
+    model.cuda(gpu)
 
     # Prepare optimizer and schedule (linear warmup and decay)
     # Prepare optimizer and schedule (linear warmup and decay)
@@ -181,6 +181,9 @@ def evaluate(dataloader_val, model, device):
 def main():    
     parser = argparse.ArgumentParser()
 
+    os.environ['MASTER_ADDR'] = '10.128.2.151'
+    os.environ['MASTER_PORT'] = '8888'
+
     # Required parameters
     parser.add_argument(
         "--data_dir",
@@ -296,8 +299,7 @@ def main():
     # Spawn mutiple gpu training
     args.n_gpu = n_gpu
     args.world_size = n_gpu * args.n_nodes
-
-
+    mp.spawn(train, nprocs=args.n_gpu, args=(args,)) 
 
 if __name__ == "__main__":
     main()
