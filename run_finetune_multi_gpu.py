@@ -30,6 +30,18 @@ def train(gpu, args):
     torch.cuda.set_device(gpu)
     model.cuda(gpu)
 
+    # Data load
+    train_sampler = DistributedSampler(args.train_dataset, num_replicas=args.world_size, rank=rank)
+    train_dataloader = DataLoader(
+        dataset=args.train_dataset, 
+        sampler=train_sampler,
+        shuffle=False,
+        num_workers=0,
+        pin_memory=False)
+
+    t_total = len(train_dataloader) * args.num_train_epochs
+    warmup_steps = args.warmup_steps if args.warmup_percent == 0 else int(args.warmup_percent * t_total)
+
     # Prepare optimizer and schedule (linear warmup and decay)
     # Prepare optimizer and schedule (linear warmup and decay)
     no_decay = ["bias", "LayerNorm.weight"]
@@ -49,18 +61,6 @@ def train(gpu, args):
 
     # Wrap the model
     model = nn.parallel.DistributedDataParallel(model, device_ids=[gpu])
-
-    # Data load
-    train_sampler = DistributedSampler(args.train_dataset, num_replicas=args.world_size, rank=rank)
-    train_dataloader = DataLoader(
-        dataset=args.train_dataset, 
-        sampler=train_sampler,
-        shuffle=False,
-        num_workers=0,
-        pin_memory=False)
-
-    t_total = len(train_dataloader) * args.num_train_epochs
-    warmup_steps = args.warmup_steps if args.warmup_percent == 0 else int(args.warmup_percent * t_total)
 
     tr_loss = 0.0
     logging_loss = 0.0
