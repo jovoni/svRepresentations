@@ -1,7 +1,278 @@
 
+import json
+import os
+import torch
+import torch.nn as nn
+from optimization import AdamW, get_linear_schedule_with_warmup
+from transformers import BertConfig, BertForSequenceClassification, DNATokenizer
+from torch.utils.data import DataLoader, RandomSampler, SequentialSampler, TensorDataset
+import pandas as pd
+import numpy as np
+from tqdm import tqdm, trange
+import argparse
 
-def main():
-    print("jello")
+from utils import compute_correct_attention_masks
+
+def evaluate(dataloader_val, model, device):
+
+    model.eval()
+    
+    loss_val_total = 0
+    predictions, true_vals = [], []
+    
+    for batch in dataloader_val:
+        
+        batch = tuple(b.to(device) for b in batch)
+        
+        inputs = {'input_ids':      batch[0],
+                  'attention_mask': batch[1],
+                  'labels':         batch[2],
+                 }
+
+        with torch.no_grad():        
+            outputs = model(**inputs)
+            
+        loss = outputs[0]
+        logits = outputs[1]
+        loss_val_total += loss.item()
+
+        logits = logits.detach().cpu().numpy()
+        label_ids = inputs['labels'].cpu().numpy()
+        predictions.append(logits)
+        true_vals.append(label_ids)
+    
+    loss_val_avg = loss_val_total/len(dataloader_val) 
+    
+    predictions = np.concatenate(predictions, axis=0)
+    true_vals = np.concatenate(true_vals, axis=0)
+            
+    return loss_val_avg, predictions, true_vals
+
+def main():    
+    parser = argparse.ArgumentParser()
+
+    # Required parameters
+    parser.add_argument(
+        "--data_dir",
+        default=None,
+        type=str,
+        required=True,
+        help="The input data dir. Should contain the .tsv files (or other data files) for the task.",
+    )
+    # parser.add_argument(
+    #     "--should_continue", action="store_true", help="Whether to continue from latest checkpoint in output_dir"
+    # )
+    parser.add_argument(
+        "--output_dir",
+        default=None,
+        type=str,
+        required=True,
+        help="The output directory where the model predictions and checkpoints will be written.",
+    )
+        
+    # Other parameters
+    parser.add_argument(
+        "--evaluate_during_training", action="store_true", help="Run evaluation during training at each logging step.",
+    )
+    parser.add_argument(
+        "--batch_size", default=8, type=int, help="Batch size per GPU/CPU for training.",
+    )
+    parser.add_argument("--learning_rate", default=5e-5, type=float, help="The initial learning rate for Adam.")
+    parser.add_argument("--weight_decay", default=0.0, type=float, help="Weight decay if we apply some.")
+    parser.add_argument("--adam_epsilon", default=1e-8, type=float, help="Epsilon for Adam optimizer.")
+    parser.add_argument("--beta1", default=0.9, type=float, help="Beta1 for Adam optimizer.")
+    parser.add_argument("--beta2", default=0.999, type=float, help="Beta2 for Adam optimizer.")
+    parser.add_argument(
+        "--num_train_epochs", default=3.0, type=float, help="Total number of training epochs to perform.",
+    )
+    parser.add_argument("--warmup_steps", default=0, type=int, help="Linear warmup over warmup_steps.")
+    parser.add_argument("--warmup_percent", default=0, type=float, help="Linear warmup over warmup_percent*total_steps.")
+
+    parser.add_argument("--logging_steps", type=int, default=500, help="Log every X updates steps.")
+    parser.add_argument("--save_steps", type=int, default=500, help="Save checkpoint every X updates steps.")
+
+    args = parser.parse_args()
+
+    # Setup CUDA, GPU & distributed training
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        n_gpu = torch.cuda.device_count()
+    else:
+        device = torch.device("cpu")
+        n_gpu = 1
+    
+    # Load model and tokenizer
+    # Load config, model and tokenizer
+    model_path = "dnabert6/"
+    config = BertConfig.from_pretrained(model_path)
+    tokenizer = DNATokenizer.from_pretrained(model_path)
+    model = BertForSequenceClassification.from_pretrained(model_path, 
+                                                        num_labels=5, # types of SV
+                                                        output_attentions=False,
+                                                        output_hidden_states=False)
+
+    print('finished loading model')
+
+    model.to(device)
+    if n_gpu > 1:
+        model = nn.DataParallel(model)
+
+    # Prepare data
+    # Read sequences
+    d_train = pd.read_csv(f"{args.data_dir}/train.tsv", sep="\t")
+    d_eval = pd.read_csv(f"{args.data_dir}/eval.tsv", sep="\t")
+
+    d_train = d_train.iloc[:100]
+    d_eval = d_train.iloc[:100]
+
+    # Prepare tokenized sequences
+    sequences_train = d_train.sequence.values
+    labels_train = d_train.label.values
+
+    sequences_eval = d_eval.sequence.values
+    labels_eval = d_eval.label.values
+
+    # Encode them
+    encoded_train = tokenizer.batch_encode_plus(
+                    sequences_train,
+                    add_special_tokens = True,  # Add '[CLS]' and '[SEP]'
+                    padding = 'longest',        # Pad to longest in batch.
+                    truncation = True,          # Truncate sentences to `max_length`.
+                    max_length = 512,   
+                    return_tensors = 'pt',        # Return pytorch tensors.
+            )
+    encoded_train = compute_correct_attention_masks(tokenizer_output=encoded_train)
+
+    encoded_eval = tokenizer.batch_encode_plus(
+                    sequences_eval,
+                    add_special_tokens = True,  # Add '[CLS]' and '[SEP]'
+                    padding = 'longest',        # Pad to longest in batch.
+                    truncation = True,          # Truncate sentences to `max_length`.
+                    max_length = 512,   
+                    return_tensors = 'pt',        # Return pytorch tensors.
+            )
+    encoded_eval = compute_correct_attention_masks(tokenizer_output=encoded_eval)
+
+    print('finished encoding sequences')
+
+    # Take useful info and prepare Dataset
+    input_ids_train = encoded_train['input_ids']
+    attention_masks_train = encoded_train['attention_mask']
+    labels_train = torch.tensor(labels_train)
+
+    input_ids_eval = encoded_eval['input_ids']
+    attention_masks_eval = encoded_eval['attention_mask']
+    labels_eval = torch.tensor(labels_eval)
+
+    dataset_train = TensorDataset(input_ids_train, attention_masks_train, labels_train)
+    dataset_eval = TensorDataset(input_ids_eval, attention_masks_eval, labels_eval) 
+
+    # Prepare Dataloader
+    train_loader = DataLoader(dataset=dataset_train, sampler=RandomSampler(dataset_train), batch_size=args.batch_size)
+    eval_loader = DataLoader(dataset=dataset_eval, sampler=SequentialSampler(dataset_eval), batch_size=args.batch_size)
+
+    t_total = len(train_loader) * args.num_train_epochs
+
+    # Prepare optimizer and schedule (linear warmup and decay)
+    # Prepare optimizer and schedule (linear warmup and decay)
+    no_decay = ["bias", "LayerNorm.weight"]
+    optimizer_grouped_parameters = [
+        {
+            "params": [p for n, p in model.named_parameters() if not any(nd in n for nd in no_decay)],
+            "weight_decay": args.weight_decay,
+        },
+        {"params": [p for n, p in model.named_parameters() if any(nd in n for nd in no_decay)], "weight_decay": 0.0},
+    ]
+
+    warmup_steps = args.warmup_steps if args.warmup_percent == 0 else int(args.warmup_percent * t_total)
+
+    optimizer = AdamW(optimizer_grouped_parameters, lr=args.learning_rate, eps=args.adam_epsilon, betas=(args.beta1, args.beta2))
+    scheduler = get_linear_schedule_with_warmup(
+        optimizer, num_warmup_steps=warmup_steps, num_training_steps=t_total
+    )
+
+    if n_gpu > 1:
+        model = torch.nn.DataParallel(model)
+
+    tr_loss = 0.0
+    logging_loss = 0.0
+    model.zero_grad()
+
+    global_step = 0
+    epochs_trained = 0
+
+    train_iterator = trange(epochs_trained, int(args.num_train_epochs), desc="Epoch")
+
+    for _ in train_iterator:
+        epoch_iterator = tqdm(train_loader, desc="Iteration")
+        for step, batch in enumerate(epoch_iterator):
+            model.train()
+
+            batch = tuple(t.to(device) for t in batch)
+            inputs = {"input_ids": batch[0], "attention_mask": batch[1], "labels": batch[2]}
+            
+            outputs = model(**inputs)
+            loss = outputs[0]  # model outputs are always tuple in transformers (see doc)
+
+            if n_gpu > 1:
+                loss = loss.mean()  # mean() to average on multi-gpu parallel training
+
+            loss.backward()
+            tr_loss += loss.item()
+
+            optimizer.step()
+            scheduler.step()  # Update learning rate schedule
+            model.zero_grad()
+            global_step += 1
+
+            if args.logging_steps > 0 and global_step % args.logging_steps == 0:
+                logs = {}
+
+                if args.evaluate_during_trainign:
+                    results = evaluate(dataloader_val=eval_loader, model=model, device=device)
+
+                    for key, value in results.items():
+                        eval_key = "eval_{}".format(key)
+                        logs[eval_key] = value
+
+                loss_scalar = (tr_loss - logging_loss) / args.logging_steps
+                learning_rate_scalar = scheduler.get_lr()[0]
+                logs["learning_rate"] = learning_rate_scalar
+                logs["loss"] = loss_scalar
+                logging_loss = tr_loss
+
+                with open(f"{output_dir}/log_{global_step}.json", "w") as f:
+                    json.dump(logs, f)
+                
+
+            if args.save_steps > 0 and global_step % args.save_steps == 0:
+                # Save model checkpoint
+                output_dir = os.path.join(output_dir, f"checkpoint-{global_step}")
+                if not os.path.exists(output_dir):
+                    os.makedirs(output_dir)
+                model_to_save = (
+                    model.module if hasattr(model, "module") else model
+                )  # Take care of distributed/parallel training
+
+                model_to_save.save_pretrained(output_dir)
+                tokenizer.save_pretrained(output_dir)
+
+                torch.save(optimizer.state_dict(), os.path.join(output_dir, "optimizer.pt"))
+                torch.save(scheduler.state_dict(), os.path.join(output_dir, "scheduler.pt"))
+
+    print("Here")
+
+    # Save a trained model, configuration and tokenizer using `save_pretrained()`.
+    # They can then be reloaded using `from_pretrained()`
+    model_to_save = (
+        model.module if hasattr(model, "module") else model
+    )
+    model_to_save.save_pretrained(args.output_dir)
+    tokenizer.save_pretrained(args.output_dir)
+
+    # Good practice: save your training arguments together with the trained model
+    torch.save(args, os.path.join(args.output_dir, "training_args.bin"))
+
 
 if __name__ == "__main__":
     main()

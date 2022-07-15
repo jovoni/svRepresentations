@@ -3,6 +3,7 @@ import random
 import re
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 
 MAX_LENGTH = 510
 MIN_LENGTH = 100
@@ -165,3 +166,22 @@ def assign_to_device(tokenizer_output, device):
             'attention_mask' : attention_mask}
 
     return output
+
+def compute_correct_attention_masks(tokenizer_output):
+    token_ids = tokenizer_output['input_ids']
+    att_masks = tokenizer_output['attention_mask']
+
+    new_att_masks = torch.where(token_ids != 0, att_masks, 0)
+    tokenizer_output['attention_mask'] = new_att_masks
+    return tokenizer_output
+
+class training_set(Dataset):
+    def __init__(self,X,Y):
+        self.X = X                           # set data
+        self.Y = Y                           # set lables
+
+    def __len__(self):
+        return len(self.X)                   # return length
+
+    def __getitem__(self, idx):
+        return [self.X[idx], self.Y[idx]]    # return list of batch data [data, labels]

@@ -70,7 +70,7 @@ def main():
                     max_length = 512,   
                     return_attention_mask = True, # Construct attn. masks.
                     return_tensors = 'pt',        # Return pytorch tensors.
-                )
+            )
 
             model_input = assign_to_device(tokenizer_output=tokenizer_output, device=device)
 
