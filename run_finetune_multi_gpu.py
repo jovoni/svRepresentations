@@ -31,9 +31,9 @@ def train(gpu, args):
     model.cuda(gpu)
 
     # Data load
-    train_sampler = DistributedSampler(args.train_dataset, num_replicas=args.world_size, rank=rank)
+    train_sampler = DistributedSampler(args.dataset_train, num_replicas=args.world_size, rank=rank)
     train_dataloader = DataLoader(
-        dataset=args.train_dataset, 
+        dataset=args.dataset_train, 
         sampler=train_sampler,
         shuffle=False,
         num_workers=0,
