@@ -1,6 +1,6 @@
 data/*
 __pycache__/*
 .ipynb_checkpoints/*
-*.ipynb
 DNABERT/
 dnabert6/*
+results/*

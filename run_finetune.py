@@ -11,7 +11,7 @@ import numpy as np
 from tqdm import tqdm, trange
 import argparse
 
-from utils import compute_correct_attention_masks
+from utils.utils import compute_correct_attention_masks
 
 def evaluate(dataloader_val, model, device):
 

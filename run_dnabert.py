@@ -1,6 +1,6 @@
 
 from embeddings import extract_sentence_embeddings_from_words, extract_word_vectors_from_tokens
-from utils import assign_to_device, preprocess_sequence
+from utils.utils import assign_to_device, preprocess_sequence
 from transformers import BertConfig, BertForSequenceClassification, DNATokenizer
 import pandas as pd
 import torch
